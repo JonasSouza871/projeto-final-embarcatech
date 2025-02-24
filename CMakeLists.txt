@@ -40,7 +40,7 @@ add_executable(menu_funcoes
 # Gerar e incluir o código PIO
 pico_generate_pio_header(menu_funcoes ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio)
 target_include_directories(menu_funcoes PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/generated
+    ${CMAKE_CURRENT_LIST_DIR}/Matriz_Bibliotecas/generated
 )
 
 # Habilita comunicação serial

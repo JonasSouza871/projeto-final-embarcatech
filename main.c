@@ -232,7 +232,7 @@ void gerenciar_menu() {
     }
 }
 
-int main() {
+int main() {   
     stdio_init_all();
     inicializar_hardware();
     desenhar_menu();
