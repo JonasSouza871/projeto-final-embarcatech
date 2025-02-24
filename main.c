@@ -6,6 +6,7 @@
 #include "Matriz_Bibliotecas/matriz_led.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>  // Adicionado para resolver o warning de snprintf
 
 // Definições de hardware
 #define JOYSTICK_Y_PIN 26
@@ -87,7 +88,7 @@ void desenhar_menu() {
     ssd1306_fill(&sistema.display, false);
 
     const char *titulo = "SELECIONE:";
-    ssd1306_draw_string(&sistema.display, titulo, 0, 0);
+    ssd1306_draw_string(&sistema.display, titulo, 0, 0, false);
 
     const char *funcoes[TOTAL_FUNCOES] = {
         "1. AFIM",
@@ -99,10 +100,10 @@ void desenhar_menu() {
     for(int i = 0; i < TOTAL_FUNCOES; i++) {
         uint8_t y = 16 + i * 12;
         if(i == sistema.funcao_selecionada) {
-            ssd1306_draw_string(&sistema.display, ">", 4, y);
-            ssd1306_draw_string(&sistema.display, funcoes[i], 16, y);
+            ssd1306_draw_string(&sistema.display, ">", 4, y, false);
+            ssd1306_draw_string(&sistema.display, funcoes[i], 16, y, false);
         } else {
-            ssd1306_draw_string(&sistema.display, funcoes[i], 12, y);
+            ssd1306_draw_string(&sistema.display, funcoes[i], 12, y, false);
         }
     }
     ssd1306_send_data(&sistema.display);
@@ -116,40 +117,67 @@ void desenhar_tela_parametros() {
 
     // Título
     snprintf(buffer, sizeof(buffer), "CONFIGURAR %s:", nomes_parametros[sistema.parametro_atual]);
-    ssd1306_draw_string(&sistema.display, buffer, 0, 0);
+    ssd1306_draw_string(&sistema.display, buffer, 0, 0, false);
 
     // Valor atual do parâmetro selecionado
     snprintf(buffer, sizeof(buffer), "Valor: %.2f", sistema.parametros[sistema.parametro_atual]);
-    ssd1306_draw_string(&sistema.display, buffer, 0, 20);
+    ssd1306_draw_string(&sistema.display, buffer, 0, 20, false);
 
     // Exibir valores de A e B
     snprintf(buffer, sizeof(buffer), "A:%.2f B:%.2f", sistema.parametros[0], sistema.parametros[1]);
-    ssd1306_draw_string(&sistema.display, buffer, 0, 40);
+    ssd1306_draw_string(&sistema.display, buffer, 0, 40, false);
 
     // Instruções
-    ssd1306_draw_string(&sistema.display, "BTN: Confirmar", 0, 50);
+    ssd1306_draw_string(&sistema.display, "BTN: Confirmar", 0, 50, false);
 
     ssd1306_send_data(&sistema.display);
 }
 
 void plotar_funcao_afim() {
+    // Limpar o display
     ssd1306_fill(&sistema.display, false);
 
-    // Desenhar eixos
-    ssd1306_vline(&sistema.display, 64, 0, 64, true);  // Eixo Y
+    // Desenhar os eixos
+    ssd1306_vline(&sistema.display, 64, 0, 63, true);  // Eixo Y
     ssd1306_hline(&sistema.display, 0, 127, 32, true); // Eixo X
 
-    // Plotar pontos
-    for(int x = -64; x < 64; x++) {
-        float y = sistema.parametros[0] * x + sistema.parametros[1];
-        int y_pos = 32 - (int)(y / 2);  // Escala de 2 unidades por pixel
-        if(y_pos >= 0 && y_pos < 64) {
+    // Escala de espaçamento dos números no eixo X e Y
+    int espacamento_x = 20;  // Espaçamento entre os números no eixo X
+    int espacamento_y = 10;  // Espaçamento entre os números no eixo Y
+
+    // Desenhar números no eixo X
+    for (int i = -60; i <= 60; i += espacamento_x) {
+        int x_pos = 64 + i;
+        if (x_pos >= 0 && x_pos < 128) {
+            char buffer[5];
+            snprintf(buffer, sizeof(buffer), "%d", i);
+            ssd1306_draw_string(&sistema.display, buffer, x_pos - 4, 34, true); // Ajuste de posição no eixo X
+        }
+    }
+
+    // Desenhar números no eixo Y
+    for (int i = -30; i <= 30; i += espacamento_y) {
+        int y_pos = 32 - i;
+        if (y_pos >= 0 && y_pos < 64) {
+            char buffer[5];
+            snprintf(buffer, sizeof(buffer), "%d", i);
+            ssd1306_draw_string(&sistema.display, buffer, 66, y_pos - 2, true); // Ajuste de posição no eixo Y
+        }
+    }
+
+    // Plotar a função afim
+    for (int x = -64; x < 64; x++) {
+        float y = sistema.parametros[0] * x + sistema.parametros[1]; // Cálculo da função afim: y = ax + b
+        int y_pos = 32 - (int)(y); // Escala do valor de y para o display
+        if (y_pos >= 0 && y_pos < 64) { // Garantir que o ponto está dentro dos limites do display
             ssd1306_pixel(&sistema.display, x + 64, y_pos, true);
         }
     }
 
+    // Enviar os dados para o display
     ssd1306_send_data(&sistema.display);
 }
+
 
 void gerenciar_parametros() {
     static absolute_time_t ultimo_tempo_a = 0;
@@ -232,7 +260,7 @@ void gerenciar_menu() {
     }
 }
 
-int main() {   
+int main() {
     stdio_init_all();
     inicializar_hardware();
     desenhar_menu();
