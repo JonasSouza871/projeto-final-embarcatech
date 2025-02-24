@@ -6,7 +6,7 @@
 #include "Matriz_Bibliotecas/matriz_led.h"
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>  // Adicionado para resolver o warning de snprintf
+#include <stdio.h>
 
 // Definições de hardware
 #define JOYSTICK_Y_PIN 26
@@ -43,6 +43,8 @@ typedef struct {
     absolute_time_t ultimo_tempo_botao;
     absolute_time_t tempo_inicio_long_press;
     bool long_press_detectado;
+    float zoom;           // Nível de zoom
+    float centro_x;       // Posição central do gráfico no eixo X
 } Sistema;
 
 // Variáveis globais
@@ -82,6 +84,8 @@ void inicializar_hardware() {
     sistema.funcao_selecionada = FUNCAO_AFIM;
     sistema.ultimo_tempo_botao = get_absolute_time();
     sistema.long_press_detectado = false;
+    sistema.zoom = 1.0;
+    sistema.centro_x = 0.0;
 }
 
 void desenhar_menu() {
@@ -147,7 +151,7 @@ void plotar_funcao_afim() {
 
     // Desenhar números no eixo X
     for (int i = -60; i <= 60; i += espacamento_x) {
-        int x_pos = 64 + i;
+        int x_pos = 64 + i / sistema.zoom;
         if (x_pos >= 0 && x_pos < 128) {
             char buffer[5];
             snprintf(buffer, sizeof(buffer), "%d", i);
@@ -157,7 +161,7 @@ void plotar_funcao_afim() {
 
     // Desenhar números no eixo Y
     for (int i = -30; i <= 30; i += espacamento_y) {
-        int y_pos = 32 - i;
+        int y_pos = 32 - i / sistema.zoom;
         if (y_pos >= 0 && y_pos < 64) {
             char buffer[5];
             snprintf(buffer, sizeof(buffer), "%d", i);
@@ -167,8 +171,9 @@ void plotar_funcao_afim() {
 
     // Plotar a função afim
     for (int x = -64; x < 64; x++) {
-        float y = sistema.parametros[0] * x + sistema.parametros[1]; // Cálculo da função afim: y = ax + b
-        int y_pos = 32 - (int)(y); // Escala do valor de y para o display
+        float x_val = (x - sistema.centro_x) / sistema.zoom;
+        float y = sistema.parametros[0] * x_val + sistema.parametros[1]; // Cálculo da função afim: y = ax + b
+        int y_pos = 32 - (int)(y * sistema.zoom); // Escala do valor de y para o display
         if (y_pos >= 0 && y_pos < 64) { // Garantir que o ponto está dentro dos limites do display
             ssd1306_pixel(&sistema.display, x + 64, y_pos, true);
         }
@@ -177,7 +182,6 @@ void plotar_funcao_afim() {
     // Enviar os dados para o display
     ssd1306_send_data(&sistema.display);
 }
-
 
 void gerenciar_parametros() {
     static absolute_time_t ultimo_tempo_a = 0;
@@ -260,6 +264,40 @@ void gerenciar_menu() {
     }
 }
 
+void gerenciar_grafico() {
+    adc_select_input(0);
+    uint16_t leitura_y = adc_read();
+    int16_t diferenca = (int16_t)leitura_y - 2048;
+
+    if(abs(diferenca) > ZONA_MORTA) {
+        if(diferenca < 0) {
+            sistema.zoom *= 1.1;  // Aumentar o zoom
+        } else {
+            sistema.zoom /= 1.1;  // Diminuir o zoom
+        }
+
+        // Limitar o zoom para evitar valores extremos
+        if(sistema.zoom < 0.1) sistema.zoom = 0.1;
+        if(sistema.zoom > 10.0) sistema.zoom = 10.0;
+
+        plotar_funcao_afim();
+        sleep_ms(200);
+    }
+
+    // Verificação de pressionamento longo
+    if(!gpio_get(JOYSTICK_BUTTON_PIN)) {
+        if(!sistema.long_press_detectado) {
+            sistema.tempo_inicio_long_press = get_absolute_time();
+            sistema.long_press_detectado = true;
+        } else if(absolute_time_diff_us(sistema.tempo_inicio_long_press, get_absolute_time()) > LONG_PRESS_DURATION_MS * 1000) {
+            sistema.estado = ESTADO_MENU;
+            desenhar_menu();
+        }
+    } else {
+        sistema.long_press_detectado = false;
+    }
+}
+
 int main() {
     stdio_init_all();
     inicializar_hardware();
@@ -276,18 +314,7 @@ int main() {
                 break;
 
             case ESTADO_GRAFICO:
-                // Verificação de pressionamento longo
-                if(!gpio_get(JOYSTICK_BUTTON_PIN)) {
-                    if(!sistema.long_press_detectado) {
-                        sistema.tempo_inicio_long_press = get_absolute_time();
-                        sistema.long_press_detectado = true;
-                    } else if(absolute_time_diff_us(sistema.tempo_inicio_long_press, get_absolute_time()) > LONG_PRESS_DURATION_MS * 1000) {
-                        sistema.estado = ESTADO_MENU;
-                        desenhar_menu();
-                    }
-                } else {
-                    sistema.long_press_detectado = false;
-                }
+                gerenciar_grafico();
                 break;
         }
         sleep_ms(50);
