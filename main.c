@@ -53,6 +53,7 @@ void tratar_interrupcao_gpio(uint gpio, uint32_t events);
 void desenhar_tela_menu();
 void desenhar_tela_configuracao_parametros();
 void plotar_grafico_funcao_afim();
+void plotar_grafico_funcao_quadratica();
 void gerenciar_estado_menu();
 void gerenciar_estado_grafico();
 
@@ -106,20 +107,23 @@ void tratar_interrupcao_gpio(uint gpio, uint32_t events) {
 
     if (gpio == PINO_BOTAO_JOYSTICK) {
         if (sistema.estado_atual == ESTADO_MENU) {
-            if (sistema.funcao_selecionada == FUNCAO_AFIM) {
-                sistema.estado_atual = ESTADO_CONFIGURAR_PARAMETROS;
-                sistema.indice_parametro_atual = 0;
-                sistema.parametros[0] = 0.0;  // Resetar parâmetros
-                sistema.parametros[1] = 0.0;
-                desenhar_tela_configuracao_parametros();
-            }
+            sistema.estado_atual = ESTADO_CONFIGURAR_PARAMETROS;
+            sistema.indice_parametro_atual = 0;
+            sistema.parametros[0] = 0.0;  // Resetar parâmetros
+            sistema.parametros[1] = 0.0;
+            sistema.parametros[2] = 0.0;
+            desenhar_tela_configuracao_parametros();
         } else if (sistema.estado_atual == ESTADO_CONFIGURAR_PARAMETROS) {
-            if (sistema.indice_parametro_atual < 1) {  // Apenas A e B para função afim
+            if (sistema.indice_parametro_atual < 2) {  // A, B e C para função quadrática
                 sistema.indice_parametro_atual++;
                 desenhar_tela_configuracao_parametros();
             } else {
                 sistema.estado_atual = ESTADO_EXIBIR_GRAFICO;
-                plotar_grafico_funcao_afim();
+                if (sistema.funcao_selecionada == FUNCAO_AFIM) {
+                    plotar_grafico_funcao_afim();
+                } else if (sistema.funcao_selecionada == FUNCAO_QUADRATICA) {
+                    plotar_grafico_funcao_quadratica();
+                }
             }
         } else if (sistema.estado_atual == ESTADO_EXIBIR_GRAFICO) {
             sistema.estado_atual = ESTADO_MENU;
@@ -166,7 +170,7 @@ void desenhar_tela_menu() {
 void desenhar_tela_configuracao_parametros() {
     ssd1306_fill(&sistema.tela, false);
 
-    const char *nomes_parametros[] = {"A", "B"};
+    const char *nomes_parametros[] = {"A", "B", "C"};
     char buffer[20];
 
     // Título
@@ -177,8 +181,12 @@ void desenhar_tela_configuracao_parametros() {
     snprintf(buffer, sizeof(buffer), "Valor: %.2f", sistema.parametros[sistema.indice_parametro_atual]);
     ssd1306_draw_string(&sistema.tela, buffer, 0, 20, false);
 
-    // Exibir valores de A e B
+    // Exibir valores de A e B na mesma linha
     snprintf(buffer, sizeof(buffer), "A:%.2f B:%.2f", sistema.parametros[0], sistema.parametros[1]);
+    ssd1306_draw_string(&sistema.tela, buffer, 0, 30, false);
+
+    // Exibir valor de C embaixo
+    snprintf(buffer, sizeof(buffer), "C:%.2f", sistema.parametros[2]);
     ssd1306_draw_string(&sistema.tela, buffer, 0, 40, false);
 
     // Instruções
@@ -187,48 +195,193 @@ void desenhar_tela_configuracao_parametros() {
     ssd1306_send_data(&sistema.tela);
 }
 
+
 void plotar_grafico_funcao_afim() {
     // Limpar o display
     ssd1306_fill(&sistema.tela, false);
-
+    
+    // Parâmetros de visualização
+    int centro_x = 64;  // Centro do display no eixo X
+    int centro_y = 32;  // Centro do display no eixo Y
+    float escala_x = sistema.nivel_zoom;  // Escala para o eixo X
+    float escala_y = 0.5 * sistema.nivel_zoom;  // Escala para o eixo Y (ajustada para melhor visualização)
+    
     // Desenhar os eixos
-    ssd1306_vline(&sistema.tela, 64, 0, 63, true);  // Eixo Y
-    ssd1306_hline(&sistema.tela, 0, 127, 32, true); // Eixo X
-
-    // Espaçamento dos números nos eixos X e Y
+    ssd1306_vline(&sistema.tela, centro_x, 0, 63, true);  // Eixo Y
+    ssd1306_hline(&sistema.tela, 0, 127, centro_y, true); // Eixo X
+    
+    // Configuração dos marcadores nos eixos - modificado para mostrar de 10 em 10
     int espacamento_x = 10;  // Espaçamento entre os números no eixo X
-    int espacamento_y = 5;  // Espaçamento entre os números no eixo Y
-
-    // Desenhar números no eixo X
+    int espacamento_y = 10;  // Espaçamento entre os números no eixo Y
+    
+    // Desenhar marcadores no eixo X
     for (int i = -30; i <= 30; i += espacamento_x) {
-        int x_pos = 64 + i / sistema.nivel_zoom;
+        int x_pos = centro_x + (int)((i - sistema.posicao_central_x) * escala_x);
         if (x_pos >= 0 && x_pos < 128) {
-            char buffer[5];
-            snprintf(buffer, sizeof(buffer), "%d", i);
-            ssd1306_draw_string(&sistema.tela, buffer, x_pos - 4, 34, true);
+            // Desenhar marcador
+            ssd1306_vline(&sistema.tela, x_pos, centro_y - 2, centro_y + 2, true);
+            
+            // Desenhar número a cada 10 unidades
+            if (i % 10 == 0 && i != 0) {  // Modificado para mostrar todos os múltiplos de 10
+                char buffer[5];
+                snprintf(buffer, sizeof(buffer), "%d", i);
+                ssd1306_draw_string(&sistema.tela, buffer, x_pos - 4, centro_y + 4, true);
+            }
         }
     }
-
-    // Desenhar números no eixo Y
-    for (int i = -15; i <= 15; i += espacamento_y) {
-        int y_pos = 32 - i / sistema.nivel_zoom;
+    
+    // Desenhar marcadores no eixo Y
+    for (int i = -30; i <= 30; i += espacamento_y) {
+        int y_pos = centro_y - (int)(i * escala_y);  // Ajustado para posição central
         if (y_pos >= 0 && y_pos < 64) {
-            char buffer[5];
-            snprintf(buffer, sizeof(buffer), "%d", i);
-            ssd1306_draw_string(&sistema.tela, buffer, 66, y_pos - 2, true);
+            // Desenhar marcador
+            ssd1306_hline(&sistema.tela, centro_x - 2, centro_x + 2, y_pos, true);
+            
+            // Desenhar número a cada 10 unidades
+            if (i % 10 == 0 && i != 0) {  // Modificado para mostrar todos os múltiplos de 10
+                char buffer[5];
+                snprintf(buffer, sizeof(buffer), "%d", i);
+                ssd1306_draw_string(&sistema.tela, buffer, centro_x + 4, y_pos - 2, true);
+            }
         }
     }
-
-    // Plotar a função afim
-    for (int x = -30; x < 30; x++) {
-        float x_val = (x - sistema.posicao_central_x) / sistema.nivel_zoom;
-        float y = sistema.parametros[0] * x_val + sistema.parametros[1]; // Cálculo da função afim: y = ax + b
-        int y_pos = 32 - (int)(y * sistema.nivel_zoom); // Escala do valor de y para o display
-        if (y_pos >= 0 && y_pos < 64) { // Garantir que o ponto está dentro dos limites do display
-            ssd1306_pixel(&sistema.tela, x + 64, y_pos, true);
+    
+    // Plotar a função afim usando mais pontos para suavizar a linha
+    float a = sistema.parametros[0];
+    float b = sistema.parametros[1];
+    
+    int ultimo_y_pos = -1;
+    for (int px = 0; px < 128; px++) {
+        // Converter coordenada do pixel para coordenada matemática
+        float x_val = (px - centro_x) / escala_x + sistema.posicao_central_x;
+        
+        // Calcular y = ax + b
+        float y_val = a * x_val + b;
+        
+        // Converter coordenada matemática para coordenada do pixel
+        int y_pos = centro_y - (int)(y_val * escala_y);
+        
+        // Verificar se está dentro dos limites do display
+        if (y_pos >= 0 && y_pos < 64) {
+            ssd1306_pixel(&sistema.tela, px, y_pos, true);
+            
+            // Conectar os pontos para uma linha mais suave
+            if (ultimo_y_pos != -1 && abs(y_pos - ultimo_y_pos) > 1) {
+                int inicio = (ultimo_y_pos < y_pos) ? ultimo_y_pos : y_pos;
+                int fim = (ultimo_y_pos < y_pos) ? y_pos : ultimo_y_pos;
+                
+                for (int y = inicio; y <= fim; y++) {
+                    if (y >= 0 && y < 64) {
+                        ssd1306_pixel(&sistema.tela, px - 1, y, true);
+                    }
+                }
+            }
+            
+            ultimo_y_pos = y_pos;
         }
     }
+    
+    // Informações sobre o zoom (mantido na parte inferior)
+    char info_zoom[20];
+    snprintf(info_zoom, sizeof(info_zoom), "Zoom: %.1fx", sistema.nivel_zoom);
+    ssd1306_draw_string(&sistema.tela, info_zoom, 0, 55, true);
+    
+    // Enviar os dados para o display
+    ssd1306_send_data(&sistema.tela);
+}
 
+
+void plotar_grafico_funcao_quadratica() {
+    // Limpar o display
+    ssd1306_fill(&sistema.tela, false);
+    
+    // Parâmetros de visualização
+    int centro_x = 64;  // Centro do display no eixo X
+    int centro_y = 32;  // Centro do display no eixo Y
+    float escala_x = sistema.nivel_zoom;  // Escala para o eixo X
+    float escala_y = 0.5 * sistema.nivel_zoom;  // Escala para o eixo Y (ajustada para melhor visualização)
+    
+    // Desenhar os eixos
+    ssd1306_vline(&sistema.tela, centro_x, 0, 63, true);  // Eixo Y
+    ssd1306_hline(&sistema.tela, 0, 127, centro_y, true); // Eixo X
+    
+    // Configuração dos marcadores nos eixos - modificado para mostrar de 10 em 10
+    int espacamento_x = 10;  // Espaçamento entre os números no eixo X
+    int espacamento_y = 10;  // Espaçamento entre os números no eixo Y
+    
+    // Desenhar marcadores no eixo X
+    for (int i = -30; i <= 30; i += espacamento_x) {
+        int x_pos = centro_x + (int)((i - sistema.posicao_central_x) * escala_x);
+        if (x_pos >= 0 && x_pos < 128) {
+            // Desenhar marcador
+            ssd1306_vline(&sistema.tela, x_pos, centro_y - 2, centro_y + 2, true);
+            
+            // Desenhar número a cada 10 unidades
+            if (i % 10 == 0 && i != 0) {  // Modificado para mostrar todos os múltiplos de 10
+                char buffer[5];
+                snprintf(buffer, sizeof(buffer), "%d", i);
+                ssd1306_draw_string(&sistema.tela, buffer, x_pos - 4, centro_y + 4, true);
+            }
+        }
+    }
+    
+    // Desenhar marcadores no eixo Y
+    for (int i = -30; i <= 30; i += espacamento_y) {
+        int y_pos = centro_y - (int)(i * escala_y);  // Ajustado para posição central
+        if (y_pos >= 0 && y_pos < 64) {
+            // Desenhar marcador
+            ssd1306_hline(&sistema.tela, centro_x - 2, centro_x + 2, y_pos, true);
+            
+            // Desenhar número a cada 10 unidades
+            if (i % 10 == 0 && i != 0) {  // Modificado para mostrar todos os múltiplos de 10
+                char buffer[5];
+                snprintf(buffer, sizeof(buffer), "%d", i);
+                ssd1306_draw_string(&sistema.tela, buffer, centro_x + 4, y_pos - 2, true);
+            }
+        }
+    }
+    
+    // Plotar a função quadrática usando mais pontos para suavizar a curva
+    float a = sistema.parametros[0];
+    float b = sistema.parametros[1];
+    float c = sistema.parametros[2];
+    
+    int ultimo_y_pos = -1;
+    for (int px = 0; px < 128; px++) {
+        // Converter coordenada do pixel para coordenada matemática
+        float x_val = (px - centro_x) / escala_x + sistema.posicao_central_x;
+        
+        // Calcular y = ax² + bx + c
+        float y_val = a * x_val * x_val + b * x_val + c;
+        
+        // Converter coordenada matemática para coordenada do pixel
+        int y_pos = centro_y - (int)(y_val * escala_y);
+        
+        // Verificar se está dentro dos limites do display
+        if (y_pos >= 0 && y_pos < 64) {
+            ssd1306_pixel(&sistema.tela, px, y_pos, true);
+            
+            // Conectar os pontos para uma curva mais suave (linha vertical)
+            if (ultimo_y_pos != -1 && abs(y_pos - ultimo_y_pos) > 1) {
+                int inicio = (ultimo_y_pos < y_pos) ? ultimo_y_pos : y_pos;
+                int fim = (ultimo_y_pos < y_pos) ? y_pos : ultimo_y_pos;
+                
+                for (int y = inicio; y <= fim; y++) {
+                    if (y >= 0 && y < 64) {
+                        ssd1306_pixel(&sistema.tela, px - 1, y, true);
+                    }
+                }
+            }
+            
+            ultimo_y_pos = y_pos;
+        }
+    }
+    
+    // Informações sobre o zoom (mantido na parte inferior)
+    char info_zoom[20];
+    snprintf(info_zoom, sizeof(info_zoom), "Zoom: %.1fx", sistema.nivel_zoom);
+    ssd1306_draw_string(&sistema.tela, info_zoom, 0, 55, true);
+    
     // Enviar os dados para o display
     ssd1306_send_data(&sistema.tela);
 }
@@ -273,7 +426,11 @@ void gerenciar_estado_grafico() {
         if (sistema.nivel_zoom < 0.1) sistema.nivel_zoom = 0.1;
         if (sistema.nivel_zoom > 10.0) sistema.nivel_zoom = 10.0;
 
-        plotar_grafico_funcao_afim();
+        if (sistema.funcao_selecionada == FUNCAO_AFIM) {
+            plotar_grafico_funcao_afim();
+        } else if (sistema.funcao_selecionada == FUNCAO_QUADRATICA) {
+            plotar_grafico_funcao_quadratica();
+        }
         sleep_ms(200);
     }
 }
