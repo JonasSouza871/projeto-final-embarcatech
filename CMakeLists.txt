@@ -34,6 +34,7 @@ add_executable(menu_funcoes
     main.c
     Matriz_Bibliotecas/matriz_led.c
     Display_Bibliotecas/ssd1306.c
+    funcoes_graficas.c
 )
 
 # Gera o cabeçalho PIO para os LEDs WS2812
