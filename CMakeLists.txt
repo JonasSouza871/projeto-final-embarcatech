@@ -54,6 +54,7 @@ target_link_libraries(menu_funcoes PRIVATE
     hardware_adc     # Suporte para ADC
     hardware_pio     # Suporte para PIO (necessário para os LEDs WS2812)
     hardware_pwm
+    m
 )
 
 # Adiciona saídas extras (binário, UF2, etc.)

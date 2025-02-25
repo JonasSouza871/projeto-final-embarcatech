@@ -8,13 +8,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 // Definições de hardware
 #define PINO_JOYSTICK_Y 26
 #define PINO_BOTAO_JOYSTICK 22
 #define PINO_BOTAO_A 5
 #define PINO_BOTAO_B 6
-#define ATRASO_DEBOUNCE_MS 500
+#define ATRASO_DEBOUNCE_MS 300
 #define ZONA_MORTA 300
 
 // Pinos RGB
@@ -44,7 +45,7 @@ typedef struct {
     ssd1306_t tela;
     EstadoSistema estado_atual;
     TipoFuncao funcao_selecionada;
-    float parametros[3];  // A, B, C (dependendo da função)
+    float parametros[4];  // A, B, C, D (dependendo da função)
     uint8_t indice_parametro_atual;
     absolute_time_t tempo_ultimo_botao;
     float nivel_zoom;           // Nível de zoom
@@ -61,6 +62,8 @@ void desenhar_tela_menu();
 void desenhar_tela_configuracao_parametros();
 void plotar_grafico_funcao_afim();
 void plotar_grafico_funcao_quadratica();
+void plotar_grafico_funcao_senoidal();
+void plotar_grafico_funcao_cossenoidal();
 void desenhar_tela_valores_quadratica();
 void gerenciar_estado_menu();
 void gerenciar_estado_grafico();
@@ -142,9 +145,10 @@ void tratar_interrupcao_gpio(uint gpio, uint32_t events) {
             sistema.parametros[0] = 0.0;  // Resetar parâmetros
             sistema.parametros[1] = 0.0;
             sistema.parametros[2] = 0.0;
+            sistema.parametros[3] = 0.0;
             desenhar_tela_configuracao_parametros();
         } else if (sistema.estado_atual == ESTADO_CONFIGURAR_PARAMETROS) {
-            if (sistema.indice_parametro_atual < 2) {  // A, B e C para função quadrática
+            if (sistema.indice_parametro_atual < 3) {  // A, B, C e D para função cossenoidal
                 sistema.indice_parametro_atual++;
                 desenhar_tela_configuracao_parametros();
             } else {
@@ -153,6 +157,10 @@ void tratar_interrupcao_gpio(uint gpio, uint32_t events) {
                     plotar_grafico_funcao_afim();
                 } else if (sistema.funcao_selecionada == FUNCAO_QUADRATICA) {
                     plotar_grafico_funcao_quadratica();
+                } else if (sistema.funcao_selecionada == FUNCAO_SENOIDAL) {
+                    plotar_grafico_funcao_senoidal();
+                } else if (sistema.funcao_selecionada == FUNCAO_COSSENOIDAL) {
+                    plotar_grafico_funcao_cossenoidal();
                 }
             }
         } else if (sistema.estado_atual == ESTADO_EXIBIR_GRAFICO) {
@@ -189,7 +197,7 @@ void desenhar_tela_menu() {
     const char *funcoes[TOTAL_FUNCOES] = {
         "1. AFIM",
         "2. QUADRATICA",
-        "3. SENO",
+        "3. SENOIDAL",
         "4. COSSENO"
     };
 
@@ -208,7 +216,7 @@ void desenhar_tela_menu() {
 void desenhar_tela_configuracao_parametros() {
     ssd1306_fill(&sistema.tela, false);
 
-    const char *nomes_parametros[] = {"A", "B", "C"};
+    const char *nomes_parametros[] = {"A", "B", "C", "D"};
     char buffer[20];
 
     // Título
@@ -223,8 +231,8 @@ void desenhar_tela_configuracao_parametros() {
     snprintf(buffer, sizeof(buffer), "A:%.2f B:%.2f", sistema.parametros[0], sistema.parametros[1]);
     ssd1306_draw_string(&sistema.tela, buffer, 0, 30, false);
 
-    // Exibir valor de C embaixo
-    snprintf(buffer, sizeof(buffer), "C:%.2f", sistema.parametros[2]);
+    // Exibir valores de C e D embaixo
+    snprintf(buffer, sizeof(buffer), "C:%.2f D:%.2f", sistema.parametros[2], sistema.parametros[3]);
     ssd1306_draw_string(&sistema.tela, buffer, 0, 40, false);
 
     // Instruções
@@ -279,9 +287,9 @@ void plotar_grafico_funcao_afim() {
     ssd1306_vline(&sistema.tela, centro_x, 0, 63, true);  // Eixo Y
     ssd1306_hline(&sistema.tela, 0, 127, centro_y, true); // Eixo X
 
-    // Configuração dos marcadores nos eixos - modificado para mostrar de 10 em 10
-    int espacamento_x = 10;  // Espaçamento entre os números no eixo X
-    int espacamento_y = 10;  // Espaçamento entre os números no eixo Y
+    // Configuração dos marcadores nos eixos - modificado para mostrar de 5 em 5 até 10, depois de 10 em 10
+    int espacamento_x = 5;  // Espaçamento entre os números no eixo X
+    int espacamento_y = 5;  // Espaçamento entre os números no eixo Y
 
     // Desenhar marcadores no eixo X
     for (int i = -30; i <= 30; i += espacamento_x) {
@@ -290,8 +298,8 @@ void plotar_grafico_funcao_afim() {
             // Desenhar marcador
             ssd1306_vline(&sistema.tela, x_pos, centro_y - 2, centro_y + 2, true);
 
-            // Desenhar número a cada 10 unidades
-            if (i % 10 == 0 && i != 0) {  // Modificado para mostrar todos os múltiplos de 10
+            // Desenhar número a cada 5 unidades até 10, depois de 10 em 10
+            if ((i % 5 == 0 && i <= 10 && i != 0) || (i % 10 == 0 && i > 10)) {
                 char buffer[5];
                 snprintf(buffer, sizeof(buffer), "%d", i);
                 ssd1306_draw_string(&sistema.tela, buffer, x_pos - 4, centro_y + 4, true);
@@ -306,8 +314,8 @@ void plotar_grafico_funcao_afim() {
             // Desenhar marcador
             ssd1306_hline(&sistema.tela, centro_x - 2, centro_x + 2, y_pos, true);
 
-            // Desenhar número a cada 10 unidades
-            if (i % 10 == 0 && i != 0) {  // Modificado para mostrar todos os múltiplos de 10
+            // Desenhar número a cada 5 unidades até 10, depois de 10 em 10
+            if ((i % 5 == 0 && i <= 10 && i != 0) || (i % 10 == 0 && i > 10)) {
                 char buffer[5];
                 snprintf(buffer, sizeof(buffer), "%d", i);
                 ssd1306_draw_string(&sistema.tela, buffer, centro_x + 4, y_pos - 2, true);
@@ -373,9 +381,9 @@ void plotar_grafico_funcao_quadratica() {
     ssd1306_vline(&sistema.tela, centro_x, 0, 63, true);  // Eixo Y
     ssd1306_hline(&sistema.tela, 0, 127, centro_y, true); // Eixo X
 
-    // Configuração dos marcadores nos eixos - modificado para mostrar de 10 em 10
-    int espacamento_x = 10;  // Espaçamento entre os números no eixo X
-    int espacamento_y = 10;  // Espaçamento entre os números no eixo Y
+    // Configuração dos marcadores nos eixos - modificado para mostrar de 5 em 5 até 10, depois de 10 em 10
+    int espacamento_x = 5;  // Espaçamento entre os números no eixo X
+    int espacamento_y = 5;  // Espaçamento entre os números no eixo Y
 
     // Desenhar marcadores no eixo X
     for (int i = -30; i <= 30; i += espacamento_x) {
@@ -384,8 +392,8 @@ void plotar_grafico_funcao_quadratica() {
             // Desenhar marcador
             ssd1306_vline(&sistema.tela, x_pos, centro_y - 2, centro_y + 2, true);
 
-            // Desenhar número a cada 10 unidades
-            if (i % 10 == 0 && i != 0) {  // Modificado para mostrar todos os múltiplos de 10
+            // Desenhar número a cada 5 unidades até 10, depois de 10 em 10
+            if ((i % 5 == 0 && i <= 10 && i != 0) || (i % 10 == 0 && i > 10)) {
                 char buffer[5];
                 snprintf(buffer, sizeof(buffer), "%d", i);
                 ssd1306_draw_string(&sistema.tela, buffer, x_pos - 4, centro_y + 4, true);
@@ -400,8 +408,8 @@ void plotar_grafico_funcao_quadratica() {
             // Desenhar marcador
             ssd1306_hline(&sistema.tela, centro_x - 2, centro_x + 2, y_pos, true);
 
-            // Desenhar número a cada 10 unidades
-            if (i % 10 == 0 && i != 0) {  // Modificado para mostrar todos os múltiplos de 10
+            // Desenhar número a cada 5 unidades até 10, depois de 10 em 10
+            if ((i % 5 == 0 && i <= 10 && i != 0) || (i % 10 == 0 && i > 10)) {
                 char buffer[5];
                 snprintf(buffer, sizeof(buffer), "%d", i);
                 ssd1306_draw_string(&sistema.tela, buffer, centro_x + 4, y_pos - 2, true);
@@ -421,6 +429,198 @@ void plotar_grafico_funcao_quadratica() {
 
         // Calcular y = ax² + bx + c
         float y_val = a * x_val * x_val + b * x_val + c;
+
+        // Converter coordenada matemática para coordenada do pixel
+        int y_pos = centro_y - (int)(y_val * escala_y);
+
+        // Verificar se está dentro dos limites do display
+        if (y_pos >= 0 && y_pos < 64) {
+            ssd1306_pixel(&sistema.tela, px, y_pos, true);
+
+            // Conectar os pontos para uma curva mais suave (linha vertical)
+            if (ultimo_y_pos != -1 && abs(y_pos - ultimo_y_pos) > 1) {
+                int inicio = (ultimo_y_pos < y_pos) ? ultimo_y_pos : y_pos;
+                int fim = (ultimo_y_pos < y_pos) ? y_pos : ultimo_y_pos;
+
+                for (int y = inicio; y <= fim; y++) {
+                    if (y >= 0 && y < 64) {
+                        ssd1306_pixel(&sistema.tela, px - 1, y, true);
+                    }
+                }
+            }
+
+            ultimo_y_pos = y_pos;
+        }
+    }
+
+    // Informações sobre o zoom (mantido na parte inferior)
+    char info_zoom[20];
+    snprintf(info_zoom, sizeof(info_zoom), "Zoom: %.1fx", sistema.nivel_zoom);
+    ssd1306_draw_string(&sistema.tela, info_zoom, 0, 55, true);
+
+    // Enviar os dados para o display
+    ssd1306_send_data(&sistema.tela);
+}
+
+void plotar_grafico_funcao_senoidal() {
+    // Limpar o display
+    ssd1306_fill(&sistema.tela, false);
+
+    // Parâmetros de visualização
+    int centro_x = 64;  // Centro do display no eixo X
+    int centro_y = 32;  // Centro do display no eixo Y
+    float escala_x = sistema.nivel_zoom;  // Escala para o eixo X
+    float escala_y = 0.5 * sistema.nivel_zoom;  // Escala para o eixo Y (ajustada para melhor visualização)
+
+    // Desenhar os eixos
+    ssd1306_vline(&sistema.tela, centro_x, 0, 63, true);  // Eixo Y
+    ssd1306_hline(&sistema.tela, 0, 127, centro_y, true); // Eixo X
+
+    // Configuração dos marcadores nos eixos - modificado para mostrar de 5 em 5 até 10, depois de 10 em 10
+    int espacamento_x = 5;  // Espaçamento entre os números no eixo X
+    int espacamento_y = 5;  // Espaçamento entre os números no eixo Y
+
+    // Desenhar marcadores no eixo X
+    for (int i = -30; i <= 30; i += espacamento_x) {
+        int x_pos = centro_x + (int)((i - sistema.posicao_central_x) * escala_x);
+        if (x_pos >= 0 && x_pos < 128) {
+            // Desenhar marcador
+            ssd1306_vline(&sistema.tela, x_pos, centro_y - 2, centro_y + 2, true);
+
+            // Desenhar número a cada 5 unidades até 10, depois de 10 em 10
+            if ((i % 5 == 0 && i <= 10 && i != 0) || (i % 10 == 0 && i > 10)) {
+                char buffer[5];
+                snprintf(buffer, sizeof(buffer), "%d", i);
+                ssd1306_draw_string(&sistema.tela, buffer, x_pos - 4, centro_y + 4, true);
+            }
+        }
+    }
+
+    // Desenhar marcadores no eixo Y
+    for (int i = -30; i <= 30; i += espacamento_y) {
+        int y_pos = centro_y - (int)(i * escala_y);  // Ajustado para posição central
+        if (y_pos >= 0 && y_pos < 64) {
+            // Desenhar marcador
+            ssd1306_hline(&sistema.tela, centro_x - 2, centro_x + 2, y_pos, true);
+
+            // Desenhar número a cada 5 unidades até 10, depois de 10 em 10
+            if ((i % 5 == 0 && i <= 10 && i != 0) || (i % 10 == 0 && i > 10)) {
+                char buffer[5];
+                snprintf(buffer, sizeof(buffer), "%d", i);
+                ssd1306_draw_string(&sistema.tela, buffer, centro_x + 4, y_pos - 2, true);
+            }
+        }
+    }
+
+    // Plotar a função senoidal usando mais pontos para suavizar a curva
+    float a = sistema.parametros[0];
+    float b = sistema.parametros[1];
+    float c = sistema.parametros[2];
+    float d = sistema.parametros[3];
+
+    int ultimo_y_pos = -1;
+    for (int px = 0; px < 128; px++) {
+        // Converter coordenada do pixel para coordenada matemática
+        float x_val = (px - centro_x) / escala_x + sistema.posicao_central_x;
+
+        // Calcular y = a + b * sin(c * x + d)
+        float y_val = a + b * sin(c * x_val + d);
+
+        // Converter coordenada matemática para coordenada do pixel
+        int y_pos = centro_y - (int)(y_val * escala_y);
+
+        // Verificar se está dentro dos limites do display
+        if (y_pos >= 0 && y_pos < 64) {
+            ssd1306_pixel(&sistema.tela, px, y_pos, true);
+
+            // Conectar os pontos para uma curva mais suave (linha vertical)
+            if (ultimo_y_pos != -1 && abs(y_pos - ultimo_y_pos) > 1) {
+                int inicio = (ultimo_y_pos < y_pos) ? ultimo_y_pos : y_pos;
+                int fim = (ultimo_y_pos < y_pos) ? y_pos : ultimo_y_pos;
+
+                for (int y = inicio; y <= fim; y++) {
+                    if (y >= 0 && y < 64) {
+                        ssd1306_pixel(&sistema.tela, px - 1, y, true);
+                    }
+                }
+            }
+
+            ultimo_y_pos = y_pos;
+        }
+    }
+
+    // Informações sobre o zoom (mantido na parte inferior)
+    char info_zoom[20];
+    snprintf(info_zoom, sizeof(info_zoom), "Zoom: %.1fx", sistema.nivel_zoom);
+    ssd1306_draw_string(&sistema.tela, info_zoom, 0, 55, true);
+
+    // Enviar os dados para o display
+    ssd1306_send_data(&sistema.tela);
+}
+
+void plotar_grafico_funcao_cossenoidal() {
+    // Limpar o display
+    ssd1306_fill(&sistema.tela, false);
+
+    // Parâmetros de visualização
+    int centro_x = 64;  // Centro do display no eixo X
+    int centro_y = 32;  // Centro do display no eixo Y
+    float escala_x = sistema.nivel_zoom;  // Escala para o eixo X
+    float escala_y = 0.5 * sistema.nivel_zoom;  // Escala para o eixo Y (ajustada para melhor visualização)
+
+    // Desenhar os eixos
+    ssd1306_vline(&sistema.tela, centro_x, 0, 63, true);  // Eixo Y
+    ssd1306_hline(&sistema.tela, 0, 127, centro_y, true); // Eixo X
+
+    // Configuração dos marcadores nos eixos - modificado para mostrar de 5 em 5 até 10, depois de 10 em 10
+    int espacamento_x = 5;  // Espaçamento entre os números no eixo X
+    int espacamento_y = 5;  // Espaçamento entre os números no eixo Y
+
+    // Desenhar marcadores no eixo X
+    for (int i = -30; i <= 30; i += espacamento_x) {
+        int x_pos = centro_x + (int)((i - sistema.posicao_central_x) * escala_x);
+        if (x_pos >= 0 && x_pos < 128) {
+            // Desenhar marcador
+            ssd1306_vline(&sistema.tela, x_pos, centro_y - 2, centro_y + 2, true);
+
+            // Desenhar número a cada 5 unidades até 10, depois de 10 em 10
+            if ((i % 5 == 0 && i <= 10 && i != 0) || (i % 10 == 0 && i > 10)) {
+                char buffer[5];
+                snprintf(buffer, sizeof(buffer), "%d", i);
+                ssd1306_draw_string(&sistema.tela, buffer, x_pos - 4, centro_y + 4, true);
+            }
+        }
+    }
+
+    // Desenhar marcadores no eixo Y
+    for (int i = -30; i <= 30; i += espacamento_y) {
+        int y_pos = centro_y - (int)(i * escala_y);  // Ajustado para posição central
+        if (y_pos >= 0 && y_pos < 64) {
+            // Desenhar marcador
+            ssd1306_hline(&sistema.tela, centro_x - 2, centro_x + 2, y_pos, true);
+
+            // Desenhar número a cada 5 unidades até 10, depois de 10 em 10
+            if ((i % 5 == 0 && i <= 10 && i != 0) || (i % 10 == 0 && i > 10)) {
+                char buffer[5];
+                snprintf(buffer, sizeof(buffer), "%d", i);
+                ssd1306_draw_string(&sistema.tela, buffer, centro_x + 4, y_pos - 2, true);
+            }
+        }
+    }
+
+    // Plotar a função cossenoidal usando mais pontos para suavizar a curva
+    float a = sistema.parametros[0];
+    float b = sistema.parametros[1];
+    float c = sistema.parametros[2];
+    float d = sistema.parametros[3];
+
+    int ultimo_y_pos = -1;
+    for (int px = 0; px < 128; px++) {
+        // Converter coordenada do pixel para coordenada matemática
+        float x_val = (px - centro_x) / escala_x + sistema.posicao_central_x;
+
+        // Calcular y = a + b * cos(c * x + d)
+        float y_val = a + b * cos(c * x_val + d);
 
         // Converter coordenada matemática para coordenada do pixel
         int y_pos = centro_y - (int)(y_val * escala_y);
@@ -501,6 +701,10 @@ void gerenciar_estado_grafico() {
             plotar_grafico_funcao_afim();
         } else if (sistema.funcao_selecionada == FUNCAO_QUADRATICA) {
             plotar_grafico_funcao_quadratica();
+        } else if (sistema.funcao_selecionada == FUNCAO_SENOIDAL) {
+            plotar_grafico_funcao_senoidal();
+        } else if (sistema.funcao_selecionada == FUNCAO_COSSENOIDAL) {
+            plotar_grafico_funcao_cossenoidal();
         }
         sleep_ms(200);
     }
@@ -540,7 +744,6 @@ void atualizar_cores_rgb() {
     }
 }
 
-
 void atualizar_brilho_zoom() {
    uint channel_vermelho = pwm_gpio_to_channel(PINO_RGB_VERMELHO);
     uint channel_verde = pwm_gpio_to_channel(PINO_RGB_VERDE);
@@ -569,8 +772,6 @@ void atualizar_brilho_zoom() {
             break;
     }
 }
-
-// Função para determinar o canal PWM de um pino
 
 int main() {
     stdio_init_all();
