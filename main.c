@@ -1,10 +1,10 @@
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
-#include "funcoes_graficas.h"  // Inclui o cabeçalho
-#include "Matriz_Bibliotecas/matriz_led.h"       // Inclui o cabeçalho da matriz de LED
+#include "funcoes_graficas.h"  
+#include "Matriz_Bibliotecas/matriz_led.h"       
 
-// Definições de hardware (Movidas para funcoes_graficas.h se forem usadas lá)
+// Definições de hardware 
 #define PINO_JOYSTICK_Y 26
 #define PINO_BOTAO_JOYSTICK 22
 #define PINO_BOTAO_A 5
@@ -17,8 +17,8 @@
 #define PINO_RGB_VERDE 11
 #define PINO_RGB_AZUL 12
 
-// Variável global (Sistema) - MOVING para funcoes_graficas.c
-extern Sistema sistema;  // Agora é global dentro de funcoes_graficas.c
+// Variável global (Sistema) 
+extern Sistema sistema; 
 
 void tratar_interrupcao_gpio(uint gpio, uint32_t events);
 
