@@ -1,0 +1,4 @@
+[wokwi]
+version = 1
+firmware = 'build/menu_funcoes.uf2'
+elf = 'build/menu_funcoes.elf'
