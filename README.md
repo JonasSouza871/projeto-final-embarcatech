@@ -1,4 +1,4 @@
-```markdown
+
 # 🕹️ Controle de Funções Matemáticas com Joystick e Raspberry Pi Pico W
 
 Este projeto demonstra como visualizar e manipular funções matemáticas (afim, quadrática, senoidal e cossenoidal) usando um joystick e botões em uma Raspberry Pi Pico W. O sistema permite selecionar diferentes funções, configurar seus parâmetros e visualizá-las em um display OLED SSD1306, com feedback visual através de um LED RGB e uma matriz de LEDs WS2812.
