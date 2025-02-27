@@ -45,7 +45,8 @@ PINO_WS2812: 7
 
 ## 🔌 **Esquemático**
 
-![Esquemático do Projeto](modularizacao-codigo.jpg)
+![image](https://github.com/user-attachments/assets/3dd291dc-45b7-48c6-b88d-c47e6fb5d3a7)
+
 
 ---
 
@@ -190,5 +191,4 @@ make
 
 *   👤 **Autor:** Jonas Souza
 *   📧 **E-mail:** jonassouza871@hotmail.com
-```
 
